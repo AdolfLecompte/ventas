@@ -68,6 +68,17 @@ export async function DELETE(_request: Request, { params }: Params) {
       return NextResponse.json({ error: 'Producto no válido' }, { status: 400 })
     }
 
+    const inCombo = await prisma.comboItem.findFirst({
+      where: { productId: id },
+      include: { combo: { select: { name: true } } }
+    })
+    if (inCombo) {
+      return NextResponse.json(
+        { error: `No se puede eliminar: está en el combo "${inCombo.combo.name}"` },
+        { status: 409 }
+      )
+    }
+
     const product = await prisma.product.delete({ where: { id } })
     return NextResponse.json(product)
   } catch (error) {

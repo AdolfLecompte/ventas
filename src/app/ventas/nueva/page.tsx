@@ -3,6 +3,9 @@
 import { useSession } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
 import { useEffect, useState } from 'react'
+import Select, { SelectOption } from '@/components/Select'
+import { Field, MoneyField } from '@/components/Field'
+import { TransferIcon, BoxIcon, CashIcon, ComboIcon, HashIcon, TagIcon } from '@/components/icons'
 
 interface Product {
   id: number
@@ -10,10 +13,18 @@ interface Product {
   price: number | null
 }
 
+interface Combo {
+  id: number
+  name: string
+  price: number
+}
+
 export default function NuevaVentaPage() {
   const { data: session, status } = useSession()
   const router = useRouter()
   const [products, setProducts] = useState<Product[]>([])
+  const [combos, setCombos] = useState<Combo[]>([])
+  // 'p:<id>' producto, 'c:<id>' combo, '__new__' producto nuevo
   const [productId, setProductId] = useState('')
   const [quantity, setQuantity] = useState('1')
   const [saleAmount, setSaleAmount] = useState('')
@@ -35,6 +46,10 @@ export default function NuevaVentaPage() {
         .then(res => res.json())
         .then(data => setProducts(Array.isArray(data) ? data : []))
         .catch(() => {})
+      fetch('/api/combos')
+        .then(res => res.json())
+        .then(data => setCombos(Array.isArray(data) ? data : []))
+        .catch(() => {})
     }
   }, [session])
 
@@ -45,10 +60,33 @@ export default function NuevaVentaPage() {
   const isAdding = productId === '__new__'
   const parsedQty = parseInt(quantity)
   const qty = isNaN(parsedQty) || parsedQty < 1 ? 1 : parsedQty
-  const selectedProduct = isAdding ? null : products.find(p => p.id === parseInt(productId))
+  const selectedCombo = productId.startsWith('c:')
+    ? combos.find(c => c.id === parseInt(productId.slice(2)))
+    : undefined
+  const selectedProduct = productId.startsWith('p:')
+    ? products.find(p => p.id === parseInt(productId.slice(2)))
+    : undefined
+  // El combo siempre tiene precio; un producto puede no tenerlo
+  const selectedUnitPrice = selectedCombo ? selectedCombo.price : (selectedProduct?.price ?? null)
   const unitPrice = isAdding
     ? (newPrice.trim() === '' ? null : parseFloat(newPrice))
-    : (selectedProduct?.price ?? null)
+    : selectedUnitPrice
+
+  const productOptions: SelectOption[] = [
+    ...products.map(p => ({
+      value: `p:${p.id}`,
+      label: p.name,
+      hint: p.price !== null ? `$${p.price.toLocaleString('es-CO')}` : undefined,
+      group: 'Productos'
+    })),
+    ...combos.map(c => ({
+      value: `c:${c.id}`,
+      label: c.name,
+      hint: `$${c.price.toLocaleString('es-CO')}`,
+      group: 'Combos'
+    })),
+    { value: '__new__', label: '+ Nuevo producto', group: 'Otro' }
+  ]
   const hasPrice = unitPrice !== null && !isNaN(unitPrice)
   const computedTotal = hasPrice ? unitPrice * qty : null
   const effectiveAmount = computedTotal !== null ? String(computedTotal) : saleAmount
@@ -69,8 +107,9 @@ export default function NuevaVentaPage() {
       setNewPrice('')
       return
     }
-    const product = products.find(p => p.id === parseInt(value))
-    updateAmountForPrice(product?.price ?? null, qty)
+    const combo = value.startsWith('c:') ? combos.find(c => c.id === parseInt(value.slice(2))) : undefined
+    const product = value.startsWith('p:') ? products.find(p => p.id === parseInt(value.slice(2))) : undefined
+    updateAmountForPrice(combo ? combo.price : (product?.price ?? null), qty)
   }
 
   const handleNewPriceChange = (value: string) => {
@@ -96,8 +135,8 @@ export default function NuevaVentaPage() {
           setSaleAmount(String(price * q))
         }
       }
-    } else if (selectedProduct?.price !== null && selectedProduct?.price !== undefined) {
-      setSaleAmount(String(selectedProduct.price * q))
+    } else if (selectedUnitPrice !== null) {
+      setSaleAmount(String(selectedUnitPrice * q))
     }
   }
 
@@ -143,13 +182,13 @@ export default function NuevaVentaPage() {
           return
         }
       } else {
-        const product = products.find(p => p.id === parseInt(productId))
-        if (!product) {
-          setError('Selecciona un producto')
+        const item = selectedCombo ?? selectedProduct
+        if (!item) {
+          setError('Selecciona un producto o combo')
           setLoading(false)
           return
         }
-        productName = product.name
+        productName = item.name
       }
 
       const res = await fetch('/api/ventas', {
@@ -172,11 +211,11 @@ export default function NuevaVentaPage() {
   }
 
   return (
-    <div className="min-h-[calc(100vh-73px)] flex items-center justify-center px-6">
-      <div className="w-full max-w-sm">
+    <div className="flex justify-center px-4 sm:px-6 py-8 sm:py-12">
+      <div className="w-full max-w-md">
         <div className="mb-8">
-          <h1 className="font-display text-4xl text-ink mb-2">Nueva venta</h1>
-          <p className="text-ink/40">Registra lo que vendiste</p>
+          <h1 className="page-title">Nueva venta</h1>
+          <p className="page-subtitle">Registra lo que vendiste</p>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-5">
@@ -186,41 +225,34 @@ export default function NuevaVentaPage() {
             </div>
           )}
 
-          <div className="grid grid-cols-[1fr_110px] gap-3 items-start">
-            <div>
-              <label className="form-label">Producto</label>
-              <select
-                value={productId}
-                onChange={(e) => handleProductChange(e.target.value)}
-                className="input-field"
-                required
-              >
-                <option value="" disabled>
-                  Selecciona
-                </option>
-                {products.map(p => (
-                  <option key={p.id} value={p.id}>
-                    {p.name}
-                  </option>
-                ))}
-                <option value="__new__">+ Nuevo producto</option>
-              </select>
-              {products.length === 0 && (
-                <p className="text-xs text-ink/40 mt-2">
-                  Elige &quot;+ Nuevo producto&quot; para agregar el primero.
-                </p>
-              )}
-            </div>
-            <div>
-              <label className="form-label">Cantidad</label>
-              <input
-                type="number"
-                min="1"
-                value={quantity}
-                onChange={(e) => handleQuantityChange(e.target.value)}
-                className="input-field font-mono"
-              />
-            </div>
+          <div>
+            <label className="form-label">Producto o combo</label>
+            <Select
+              value={productId}
+              onChange={handleProductChange}
+              options={productOptions}
+              placeholder="Selecciona"
+              icon={selectedCombo ? ComboIcon : BoxIcon}
+              ariaLabel="Producto o combo"
+            />
+            {products.length === 0 && combos.length === 0 && (
+              <p className="text-xs text-ink/40 mt-2">
+                Elige &quot;+ Nuevo producto&quot; para agregar el primero.
+              </p>
+            )}
+          </div>
+
+          <div>
+            <label className="form-label">Cantidad</label>
+            <Field
+              type="number"
+              icon={HashIcon}
+              min="1"
+              inputMode="numeric"
+              value={quantity}
+              onChange={(e) => handleQuantityChange(e.target.value)}
+              className="font-mono"
+            />
           </div>
 
           {isAdding && (
@@ -228,48 +260,35 @@ export default function NuevaVentaPage() {
               <p className="text-sm font-medium text-ink/60">Nuevo producto</p>
               <div>
                 <label className="form-label !mb-1">Nombre</label>
-                <input
+                <Field
                   type="text"
+                  icon={TagIcon}
                   value={newName}
                   onChange={(e) => setNewName(e.target.value)}
-                  className="input-field"
                   placeholder="Camiseta azul"
                 />
               </div>
               <div>
                 <label className="form-label !mb-1">Precio (opcional)</label>
-                <div className="relative">
-                  <span className="absolute left-4 top-3 text-ink/30 font-mono">$</span>
-                  <input
-                    type="number"
-                    step="0.01"
-                    min="0"
-                    value={newPrice}
-                    onChange={(e) => handleNewPriceChange(e.target.value)}
-                    className="input-field !pl-8 font-mono"
-                    placeholder="0"
-                  />
-                </div>
+                <MoneyField
+                  value={newPrice}
+                  onChange={(e) => handleNewPriceChange(e.target.value)}
+                  placeholder="0"
+                />
               </div>
             </div>
           )}
 
           <div>
             <label className="form-label">Monto a pagar</label>
-            <div className="relative">
-              <span className="absolute left-4 top-3 text-ink/30 font-mono">$</span>
-              <input
-                type="number"
-                step="0.01"
-                min="0"
-                value={effectiveAmount}
-                onChange={(e) => setSaleAmount(e.target.value)}
-                readOnly={hasPrice}
-                className="input-field !pl-8 font-mono disabled:opacity-60"
-                placeholder="0"
-                required
-              />
-            </div>
+            <MoneyField
+              value={effectiveAmount}
+              onChange={(e) => setSaleAmount(e.target.value)}
+              readOnly={hasPrice}
+              className={hasPrice ? 'opacity-70' : ''}
+              placeholder="0"
+              required
+            />
             {hasPrice && (
               <p className="text-xs text-ink/40 mt-2 font-mono">
                 ${unitPrice.toLocaleString('es-CO')} × {qty}
@@ -289,7 +308,10 @@ export default function NuevaVentaPage() {
                     : 'border-ledger text-ink/50 hover:border-ink/20'
                 }`}
               >
-                Efectivo
+                <span className="inline-flex items-center justify-center gap-2">
+                  <CashIcon width={18} height={18} />
+                  Efectivo
+                </span>
               </button>
               <button
                 type="button"
@@ -300,7 +322,10 @@ export default function NuevaVentaPage() {
                     : 'border-ledger text-ink/50 hover:border-ink/20'
                 }`}
               >
-                Transferencia
+                <span className="inline-flex items-center justify-center gap-2">
+                  <TransferIcon width={18} height={18} />
+                  Transferencia
+                </span>
               </button>
             </div>
           </div>

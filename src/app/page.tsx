@@ -33,20 +33,24 @@ export default function Home() {
     return acc
   }, {} as Record<string, number>)
 
+  const recent = [...sales]
+    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+    .slice(0, 5)
+
   const topProducts = Object.entries(productSales)
     .sort(([, a], [, b]) => b - a)
     .slice(0, 5)
 
   return (
-    <div className="max-w-6xl mx-auto px-6 py-12">
+    <div className="page-container">
       <div className="mb-12">
         <p className="stat-label mb-2">Total recaudado</p>
-        <p className="font-mono text-4xl md:text-6xl font-bold text-ink tracking-tight">
+        <p className="font-mono text-3xl sm:text-4xl md:text-6xl font-bold text-ink tracking-tight">
           ${totalMoney.toLocaleString('es-CO')}
         </p>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-12">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 sm:gap-6 mb-10 sm:mb-12">
         <div className="card">
           <p className="stat-label mb-1">Ventas realizadas</p>
           <p className="stat-number">{totalSales}</p>
@@ -63,7 +67,7 @@ export default function Home() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6">
         <div className="card">
           <h3 className="font-display text-xl text-ink mb-4">Más vendidos</h3>
           {topProducts.length > 0 ? (
@@ -81,15 +85,31 @@ export default function Home() {
         </div>
 
         <div className="card">
-          <h3 className="font-display text-xl text-ink mb-4">Acciones</h3>
-          <div className="space-y-3">
-            <Link href="/ventas/nueva" className="btn-primary block text-center">
-              Registrar venta
-            </Link>
-            <Link href="/ventas" className="btn-secondary block text-center">
-              Ver reporte completo
-            </Link>
+          <div className="flex items-baseline justify-between mb-4">
+            <h3 className="font-display text-xl text-ink">Últimas ventas</h3>
+            {sales.length > 0 && (
+              <Link href="/ventas" className="text-sm text-copper hover:text-copper-dark transition-colors">
+                Ver todas
+              </Link>
+            )}
           </div>
+          {recent.length > 0 ? (
+            <ul className="divide-y divide-ledger/60">
+              {recent.map(sale => (
+                <li key={sale.id} className="flex justify-between items-baseline gap-3 py-2.5">
+                  <span className="text-ink/80 truncate">
+                    {sale.quantity > 1 && <span className="font-mono text-ink/50">{sale.quantity}× </span>}
+                    {sale.productName}
+                  </span>
+                  <span className="font-mono text-sm text-ink/70 shrink-0">
+                    ${sale.saleAmount.toLocaleString('es-CO')}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="text-ink/30 text-sm">Sin ventas aún</p>
+          )}
         </div>
       </div>
     </div>

@@ -22,6 +22,26 @@ model Product {
   name      String   @unique
   price     Float?
   createdAt DateTime @default(now())
+  comboItems ComboItem[]
+}
+
+model Combo {
+  id        Int         @id @default(autoincrement())
+  name      String      @unique
+  price     Float
+  createdAt DateTime    @default(now())
+  items     ComboItem[]
+}
+
+model ComboItem {
+  id        Int     @id @default(autoincrement())
+  comboId   Int
+  productId Int
+  quantity  Int     @default(1)
+  combo     Combo   @relation(fields: [comboId], references: [id], onDelete: Cascade)
+  product   Product @relation(fields: [productId], references: [id])
+
+  @@unique([comboId, productId])
 }
 
 model Sale {
