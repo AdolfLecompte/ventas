@@ -41,8 +41,10 @@ export default function Home() {
 
   const totalSales = sales.length
   const totalMoney = sales.reduce((sum, sale) => sum + sale.saleAmount, 0)
+  const totalUnits = sales.reduce((sum, sale) => sum + sale.quantity, 0)
+  // Unidades vendidas por producto o combo
   const productSales = sales.reduce((acc, sale) => {
-    acc[sale.productName] = (acc[sale.productName] || 0) + 1
+    acc[sale.productName] = (acc[sale.productName] || 0) + sale.quantity
     return acc
   }, {} as Record<string, number>)
 
@@ -69,8 +71,8 @@ export default function Home() {
           <p className="stat-number">{totalSales}</p>
         </div>
         <div className="card">
-          <p className="stat-label mb-1">Productos distintos</p>
-          <p className="stat-number">{Object.keys(productSales).length}</p>
+          <p className="stat-label mb-1">Unidades vendidas</p>
+          <p className="stat-number">{totalUnits.toLocaleString('es-CO')}</p>
         </div>
         <div className="card">
           <p className="stat-label mb-1">Promedio por venta</p>
