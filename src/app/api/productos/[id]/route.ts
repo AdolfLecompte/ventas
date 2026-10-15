@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/db'
+import { parseStock } from '@/lib/inventory'
 
 type Params = { params: { id: string } }
 
@@ -19,7 +20,7 @@ export async function PUT(request: Request, { params }: Params) {
     }
 
     const body = await request.json()
-    const data: { name?: string; price?: number | null } = {}
+    const data: { name?: string; price?: number | null; stock?: number | null } = {}
 
     if (body.name !== undefined) {
       const name = typeof body.name === 'string' ? body.name.trim() : ''
@@ -46,6 +47,12 @@ export async function PUT(request: Request, { params }: Params) {
         data.price = price
       }
     }
+
+    const stock = parseStock(body.stock)
+    if (stock === 'invalid') {
+      return NextResponse.json({ error: 'El stock debe ser un número entero de 0 en adelante' }, { status: 400 })
+    }
+    if (stock !== undefined) data.stock = stock
 
     const product = await prisma.product.update({ where: { id }, data })
     return NextResponse.json(product)
