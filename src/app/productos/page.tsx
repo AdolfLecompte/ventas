@@ -5,12 +5,15 @@ import { useRouter } from 'next/navigation'
 import { useEffect, useMemo, useState } from 'react'
 import Select from '@/components/Select'
 import { Field, MoneyField, SearchField } from '@/components/Field'
-import { PencilIcon, PlusIcon, SortIcon, TagIcon, TrashIcon } from '@/components/icons'
+import { BoxIcon, PencilIcon, PlusIcon, SortIcon, TagIcon, TrashIcon } from '@/components/icons'
+import StockBadge from '@/components/StockBadge'
+import { LOW_STOCK } from '@/lib/inventory-shared'
 
 interface Product {
   id: number
   name: string
   price: number | null
+  stock: number | null
 }
 
 export default function ProductosPage() {
@@ -19,14 +22,16 @@ export default function ProductosPage() {
   const [products, setProducts] = useState<Product[]>([])
   const [formName, setFormName] = useState('')
   const [formPrice, setFormPrice] = useState('')
+  const [formStock, setFormStock] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [editing, setEditing] = useState<Product | null>(null)
   const [editName, setEditName] = useState('')
   const [editPrice, setEditPrice] = useState('')
+  const [editStock, setEditStock] = useState('')
   const [deleting, setDeleting] = useState<Product | null>(null)
   const [query, setQuery] = useState('')
-  const [priceFilter, setPriceFilter] = useState<'all' | 'priced' | 'unpriced'>('all')
+  const [priceFilter, setPriceFilter] = useState<'all' | 'priced' | 'unpriced' | 'low' | 'out'>('all')
   const [sort, setSort] = useState('name-asc')
 
   useEffect(() => {
@@ -52,6 +57,8 @@ export default function ProductosPage() {
     const q = query.trim().toLowerCase()
     const list = products.filter(p => {
       if (q && !p.name.toLowerCase().includes(q)) return false
+      if (priceFilter === 'low') return p.stock !== null && p.stock > 0 && p.stock <= LOW_STOCK
+      if (priceFilter === 'out') return p.stock === 0
       if (priceFilter === 'priced') return p.price !== null
       if (priceFilter === 'unpriced') return p.price === null
       return true
@@ -60,6 +67,8 @@ export default function ProductosPage() {
     // Los productos sin precio van al final en los órdenes por precio
     const price = (p: Product, empty: number) => p.price ?? empty
     switch (sort) {
+      case 'stock-asc': return list.sort((a, b) => (a.stock ?? Infinity) - (b.stock ?? Infinity) || byName(a, b))
+      case 'stock-desc': return list.sort((a, b) => (b.stock ?? -Infinity) - (a.stock ?? -Infinity) || byName(a, b))
       case 'name-desc': return list.sort((a, b) => byName(b, a))
       case 'price-asc': return list.sort((a, b) => price(a, Infinity) - price(b, Infinity) || byName(a, b))
       case 'price-desc': return list.sort((a, b) => price(b, -Infinity) - price(a, -Infinity) || byName(a, b))
@@ -80,6 +89,13 @@ export default function ProductosPage() {
     return price
   }
 
+  // '' = sin control de inventario; undefined = inválido
+  const parseStockInput = (value: string): number | null | undefined => {
+    if (value.trim() === '') return null
+    const n = Number(value)
+    return Number.isInteger(n) && n >= 0 ? n : undefined
+  }
+
   const handleAdd = async (e: React.FormEvent) => {
     e.preventDefault()
     setError('')
@@ -96,12 +112,18 @@ export default function ProductosPage() {
       return
     }
 
+    const stock = parseStockInput(formStock)
+    if (stock === undefined) {
+      setError('El stock debe ser un número entero de 0 en adelante')
+      return
+    }
+
     setLoading(true)
     try {
       const res = await fetch('/api/productos', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name, price })
+        body: JSON.stringify({ name, price, stock })
       })
 
       const data = await res.json().catch(() => ({}))
@@ -113,6 +135,7 @@ export default function ProductosPage() {
 
       setFormName('')
       setFormPrice('')
+      setFormStock('')
       loadProducts()
     } catch {
       setError('Error de conexión')
@@ -124,6 +147,7 @@ export default function ProductosPage() {
     setEditing(product)
     setEditName(product.name)
     setEditPrice(product.price !== null ? String(product.price) : '')
+    setEditStock(product.stock !== null ? String(product.stock) : '')
     setError('')
   }
 
@@ -143,12 +167,18 @@ export default function ProductosPage() {
       return
     }
 
+    const stock = parseStockInput(editStock)
+    if (stock === undefined) {
+      setError('El stock debe ser un número entero de 0 en adelante')
+      return
+    }
+
     setLoading(true)
     try {
       const res = await fetch(`/api/productos/${editing.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name, price })
+        body: JSON.stringify({ name, price, stock })
       })
 
       const data = await res.json().catch(() => ({}))
@@ -218,12 +248,26 @@ export default function ProductosPage() {
               aria-label="Nombre del producto"
             />
           </div>
-          <div className="sm:w-48 xl:w-auto">
+          <div className="sm:w-40 xl:w-auto">
             <MoneyField
               value={formPrice}
               onChange={(e) => setFormPrice(e.target.value)}
               placeholder="Precio (opcional)"
               aria-label="Precio"
+            />
+          </div>
+          <div className="sm:w-36 xl:w-auto">
+            <Field
+              type="number"
+              icon={BoxIcon}
+              min="0"
+              step="1"
+              inputMode="numeric"
+              value={formStock}
+              onChange={(e) => setFormStock(e.target.value)}
+              placeholder="Stock inicial"
+              aria-label="Stock inicial"
+              className="font-mono"
             />
           </div>
           <button
@@ -235,6 +279,9 @@ export default function ProductosPage() {
             Agregar
           </button>
         </form>
+        <p className="text-xs text-ink/40 mt-3">
+          El stock es opcional. Si lo dejas vacío, el producto se vende sin control de inventario.
+        </p>
       </div>
 
       <div className="card xl:col-span-3">
@@ -262,12 +309,14 @@ export default function ProductosPage() {
                 { value: 'name-asc', label: 'Nombre A–Z' },
                 { value: 'name-desc', label: 'Nombre Z–A' },
                 { value: 'price-asc', label: 'Precio: menor a mayor' },
-                { value: 'price-desc', label: 'Precio: mayor a menor' }
+                { value: 'price-desc', label: 'Precio: mayor a menor' },
+                { value: 'stock-asc', label: 'Stock: menor a mayor' },
+                { value: 'stock-desc', label: 'Stock: mayor a menor' }
               ]}
             />
           </div>
           <div className="flex flex-wrap gap-2">
-            {([['all', 'Todos'], ['priced', 'Con precio'], ['unpriced', 'Sin precio']] as const).map(([key, label]) => (
+            {([['all', 'Todos'], ['out', 'Agotados'], ['low', 'Stock bajo'], ['priced', 'Con precio'], ['unpriced', 'Sin precio']] as const).map(([key, label]) => (
               <button
                 key={key}
                 type="button"
@@ -286,6 +335,7 @@ export default function ProductosPage() {
               <tr>
                 <th className="table-header text-left pb-3">Producto</th>
                 <th className="table-header text-right pb-3">Precio</th>
+                <th className="table-header text-right pb-3">Stock</th>
                 <th className="table-header text-right pb-3">Acciones</th>
               </tr>
             </thead>
@@ -296,6 +346,7 @@ export default function ProductosPage() {
                   <td className="py-3 text-right font-mono text-sm text-ink/70">
                     {product.price !== null ? `$${product.price.toLocaleString('es-CO')}` : '—'}
                   </td>
+                  <td className="py-3 text-right"><StockBadge stock={product.stock} /></td>
                   <td className="py-3 text-right whitespace-nowrap">
                     <button onClick={() => openEdit(product)} className="icon-btn" aria-label={`Editar ${product.name}`}>
                       <PencilIcon width={18} height={18} />
@@ -322,6 +373,7 @@ export default function ProductosPage() {
                 <p className="font-mono text-sm text-ink/50">
                   {product.price !== null ? `$${product.price.toLocaleString('es-CO')}` : 'Sin precio'}
                 </p>
+                <div className="mt-1"><StockBadge stock={product.stock} /></div>
               </div>
               <button onClick={() => openEdit(product)} className="icon-btn" aria-label={`Editar ${product.name}`}>
                 <PencilIcon width={18} height={18} />
@@ -366,6 +418,20 @@ export default function ProductosPage() {
                   value={editPrice}
                   onChange={(e) => setEditPrice(e.target.value)}
                   placeholder="Sin precio"
+                />
+              </div>
+              <div>
+                <label className="form-label">Stock (vacío = sin control)</label>
+                <Field
+                  type="number"
+                  icon={BoxIcon}
+                  min="0"
+                  step="1"
+                  inputMode="numeric"
+                  value={editStock}
+                  onChange={(e) => setEditStock(e.target.value)}
+                  placeholder="Sin control"
+                  className="font-mono"
                 />
               </div>
               <div className="flex gap-3 pt-2">

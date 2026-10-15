@@ -8,6 +8,7 @@ export interface SelectOption {
   label: string
   hint?: string
   group?: string
+  disabled?: boolean
 }
 
 interface SelectProps {
@@ -62,6 +63,7 @@ export default function Select({
   }, [open, active, listId])
 
   const choose = (v: string) => {
+    if (options.find(o => o.value === v)?.disabled) return
     onChange(v)
     setOpen(false)
   }
@@ -126,9 +128,12 @@ export default function Select({
                   aria-selected={o.value === value}
                   onMouseEnter={() => setActive(i)}
                   onClick={() => choose(o.value)}
-                  className={`flex items-center gap-3 px-4 py-2.5 cursor-pointer text-sm ${
-                    i === active ? 'bg-ledger/60' : ''
-                  } ${o.value === value ? 'text-copper font-medium' : 'text-ink/80'}`}
+                  aria-disabled={o.disabled}
+                  className={`flex items-center gap-3 px-4 py-2.5 text-sm ${
+                    o.disabled ? 'cursor-not-allowed text-ink/30' : 'cursor-pointer'
+                  } ${i === active && !o.disabled ? 'bg-ledger/60' : ''} ${
+                    o.value === value ? 'text-copper font-medium' : o.disabled ? '' : 'text-ink/80'
+                  }`}
                 >
                   <span className="flex-1 truncate">{o.label}</span>
                   {o.hint && <span className="font-mono text-xs text-ink/40">{o.hint}</span>}

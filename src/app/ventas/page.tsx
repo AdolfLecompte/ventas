@@ -453,6 +453,11 @@ export default function VentasPage() {
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 px-4">
           <div className="bg-paper rounded-xl p-6 w-full max-w-sm">
             <h3 className="font-display text-xl text-ink mb-4">Editar venta</h3>
+            {error && (
+              <div className="bg-red-50 text-red-700 text-sm px-4 py-3 rounded-lg border border-red-100 mb-4">
+                {error}
+              </div>
+            )}
             <div className="space-y-4">
               <div>
                 <label className="form-label">Producto</label>
@@ -461,7 +466,14 @@ export default function VentasPage() {
                   icon={BoxIcon}
                   value={editForm.productName}
                   onChange={(e) => setEditForm({ ...editForm, productName: e.target.value })}
+                  disabled={editingSale.productId != null || editingSale.comboId != null}
+                  className="disabled:opacity-60"
                 />
+                {(editingSale.productId != null || editingSale.comboId != null) && (
+                  <p className="text-xs text-ink/40 mt-1">
+                    Al cambiar la cantidad se ajusta el inventario automáticamente.
+                  </p>
+                )}
               </div>
               <div>
                 <label className="form-label">Cantidad</label>

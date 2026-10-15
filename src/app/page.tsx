@@ -5,11 +5,14 @@ import { useRouter } from 'next/navigation'
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { Sale } from '@/lib/types'
+import StockBadge from '@/components/StockBadge'
+import { LOW_STOCK } from '@/lib/inventory-shared'
 
 export default function Home() {
   const { data: session, status } = useSession()
   const router = useRouter()
   const [sales, setSales] = useState<Sale[]>([])
+  const [lowStock, setLowStock] = useState<{ id: number; name: string; stock: number }[]>([])
 
   useEffect(() => {
     if (status === 'unauthenticated') {
@@ -19,6 +22,16 @@ export default function Home() {
       fetch('/api/ventas')
         .then(res => res.json())
         .then(data => setSales(data))
+      fetch('/api/productos')
+        .then(res => res.json())
+        .then((data: { id: number; name: string; stock: number | null }[]) =>
+          setLowStock(
+            (Array.isArray(data) ? data : [])
+              .filter((p): p is { id: number; name: string; stock: number } => p.stock !== null && p.stock <= LOW_STOCK)
+              .sort((a, b) => a.stock - b.stock)
+          )
+        )
+        .catch(() => {})
     }
   }, [session, status, router])
 
@@ -67,7 +80,7 @@ export default function Home() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 sm:gap-6">
         <div className="card">
           <h3 className="font-display text-xl text-ink mb-4">Más vendidos</h3>
           {topProducts.length > 0 ? (
@@ -109,6 +122,27 @@ export default function Home() {
             </ul>
           ) : (
             <p className="text-ink/30 text-sm">Sin ventas aún</p>
+          )}
+        </div>
+
+        <div className="card">
+          <div className="flex items-baseline justify-between mb-4">
+            <h3 className="font-display text-xl text-ink">Inventario</h3>
+            <Link href="/productos" className="text-sm text-copper hover:text-copper-dark transition-colors">
+              Ver productos
+            </Link>
+          </div>
+          {lowStock.length > 0 ? (
+            <ul className="divide-y divide-ledger/60">
+              {lowStock.slice(0, 5).map(p => (
+                <li key={p.id} className="flex justify-between items-center gap-3 py-2.5">
+                  <span className="text-ink/80 truncate">{p.name}</span>
+                  <StockBadge stock={p.stock} />
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="text-ink/30 text-sm">Sin alertas de stock</p>
           )}
         </div>
       </div>
